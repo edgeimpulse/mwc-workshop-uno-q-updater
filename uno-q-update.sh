@@ -53,7 +53,7 @@ else
     echo "Changing password on UNO-Q..."
     # Try to change password using passwd, assuming current password is 'arduino'
     echo "Attempting to change password on UNO-Q using passwd..."
-    CHANGE_PASSWD_CMD="echo -e 'arduino\n$UNOQ_DEFAULT_PASSWORD\n$UNOQ_DEFAULT_PASSWORD' | passwd arduino"
+    CHANGE_PASSWD_CMD="echo -e '$UNOQ_DEFAULT_PASSWORD\n$UNOQ_DEFAULT_PASSWORD' | passwd arduino"
     PASSWD_OUTPUT=$(adb shell "$CHANGE_PASSWD_CMD" 2>&1)
     if echo "$PASSWD_OUTPUT" | grep -q "successfully"; then
         echo "Password changed successfully using passwd."
