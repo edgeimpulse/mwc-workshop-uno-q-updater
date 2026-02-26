@@ -51,16 +51,30 @@ if [ -z "$UNOQ_DEFAULT_PASSWORD" ]; then
     echo "UNOQ_DEFAULT_PASSWORD is not set. Skipping password change."
 else
     echo "Changing password on UNO-Q..."
-    # Try to change password using passwd, assuming current password is 'arduino'
-    echo "Attempting to change password on UNO-Q using passwd..."
-    CHANGE_PASSWD_CMD="echo -e '$UNOQ_DEFAULT_PASSWORD\n$UNOQ_DEFAULT_PASSWORD' | passwd arduino"
-    PASSWD_OUTPUT=$(adb shell "$CHANGE_PASSWD_CMD" 2>&1)
-    if echo "$PASSWD_OUTPUT" | grep -q "successfully"; then
-        echo "Password changed successfully using passwd."
+    # Some devices prompt only for new password (no current password set),
+    # others prompt for current password first.
+    echo "Attempting password change without current password..."
+    CHANGE_PASSWD_CMD_NO_CURRENT="printf '%s\n%s\n' '$UNOQ_DEFAULT_PASSWORD' '$UNOQ_DEFAULT_PASSWORD' | passwd arduino"
+    PASSWD_OUTPUT=$(adb -s "$DEVICE" shell "$CHANGE_PASSWD_CMD_NO_CURRENT" 2>&1)
+
+    if echo "$PASSWD_OUTPUT" | grep -Eqi "password updated successfully|all authentication tokens updated successfully|passwd: password changed"; then
+        echo "Password changed successfully (no current password required)."
+    elif echo "$PASSWD_OUTPUT" | grep -Eqi "current password|authentication failure|password unchanged"; then
+        echo "Device appears to require current password. Retrying with current password 'arduino'..."
+        CHANGE_PASSWD_CMD_WITH_CURRENT="printf '%s\n%s\n%s\n' 'arduino' '$UNOQ_DEFAULT_PASSWORD' '$UNOQ_DEFAULT_PASSWORD' | passwd arduino"
+        PASSWD_OUTPUT=$(adb -s "$DEVICE" shell "$CHANGE_PASSWD_CMD_WITH_CURRENT" 2>&1)
+
+        if echo "$PASSWD_OUTPUT" | grep -Eqi "password updated successfully|all authentication tokens updated successfully|passwd: password changed"; then
+            echo "Password changed successfully using current password."
+        elif echo "$PASSWD_OUTPUT" | grep -qi "authentication token manipulation error"; then
+            echo "Password change failed due to token manipulation error. Password may have already been changed."
+        elif echo "$PASSWD_OUTPUT" | grep -qi "password unchanged"; then
+            echo "Password was not changed. It may already be set to something other than the flashed default arduino."
+        else
+            echo "Password change failed. Output: $PASSWD_OUTPUT"
+        fi
     elif echo "$PASSWD_OUTPUT" | grep -qi "authentication token manipulation error"; then
         echo "Password change failed due to token manipulation error. Password may have already been changed."
-    elif echo "$PASSWD_OUTPUT" | grep -qi "password unchanged"; then
-        echo "Password was not changed. It may already be set to something toher than the flashed default arduino."
     else
         echo "Password may have already been changed or another error occurred. Output: $PASSWD_OUTPUT"
     fi
