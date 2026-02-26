@@ -1,5 +1,13 @@
 #!/bin/bash
 
+set -u
+
+log() {
+    local device="$1"
+    local message="$2"
+    echo "[$device] $message"
+}
+
 # Load .env file if present
 if [ -f .env ]; then
     echo "Loading .env file..."
@@ -16,13 +24,19 @@ else
     echo "ADB is already installed."
 fi
 
-# Check for connected UNO-Q devices
-DEVICE=$(adb devices | awk 'NR>1 && $2=="device" {print $1}')
-if [ -z "$DEVICE" ]; then
-    echo "No UNO-Q device found. Please connect your device."
+# Discover connected UNO-Q devices
+DEVICES=()
+while read -r serial state; do
+    if [ "$state" = "device" ] && [ -n "$serial" ]; then
+        DEVICES+=("$serial")
+    fi
+done < <(adb devices | awk 'NR>1 && NF>=2 {print $1" "$2}')
+
+if [ ${#DEVICES[@]} -eq 0 ]; then
+    echo "No UNO-Q devices found. Please connect at least one device."
     exit 1
 else
-    echo "Connected device: $DEVICE"
+    echo "Connected devices (${#DEVICES[@]}): ${DEVICES[*]}"
 fi
 
 # Path to script for UNO-Q
@@ -37,50 +51,103 @@ else
     echo "App brick repository already present on Mac."
 fi
 
-# Push app brick and setup files to UNO-Q
-adb -s "$DEVICE" push "$APP_BRICK_DIR" /home/arduino/ArduinoApps/
-adb -s "$DEVICE" push $UNOQ_SCRIPT /home/arduino/.$UNOQ_SCRIPT
-adb -s "$DEVICE" push .env /home/arduino/.env
+process_device() {
+    local device="$1"
+    local command_output=""
 
-# Make setup script executable
+    log "$device" "Starting update workflow..."
 
-adb shell "chmod +x /home/arduino/.$UNOQ_SCRIPT"
-
-# Change password on UNO-Q using environment variable
-if [ -z "$UNOQ_DEFAULT_PASSWORD" ]; then
-    echo "UNOQ_DEFAULT_PASSWORD is not set. Skipping password change."
-else
-    echo "Changing password on UNO-Q..."
-    # Some devices prompt only for new password (no current password set),
-    # others prompt for current password first.
-    echo "Attempting password change without current password..."
-    CHANGE_PASSWD_CMD_NO_CURRENT="printf '%s\n%s\n' '$UNOQ_DEFAULT_PASSWORD' '$UNOQ_DEFAULT_PASSWORD' | passwd arduino"
-    PASSWD_OUTPUT=$(adb -s "$DEVICE" shell "$CHANGE_PASSWD_CMD_NO_CURRENT" 2>&1)
-
-    if echo "$PASSWD_OUTPUT" | grep -Eqi "password updated successfully|all authentication tokens updated successfully|passwd: password changed"; then
-        echo "Password changed successfully (no current password required)."
-    elif echo "$PASSWD_OUTPUT" | grep -Eqi "current password|authentication failure|password unchanged"; then
-        echo "Device appears to require current password. Retrying with current password 'arduino'..."
-        CHANGE_PASSWD_CMD_WITH_CURRENT="printf '%s\n%s\n%s\n' 'arduino' '$UNOQ_DEFAULT_PASSWORD' '$UNOQ_DEFAULT_PASSWORD' | passwd arduino"
-        PASSWD_OUTPUT=$(adb -s "$DEVICE" shell "$CHANGE_PASSWD_CMD_WITH_CURRENT" 2>&1)
-
-        if echo "$PASSWD_OUTPUT" | grep -Eqi "password updated successfully|all authentication tokens updated successfully|passwd: password changed"; then
-            echo "Password changed successfully using current password."
-        elif echo "$PASSWD_OUTPUT" | grep -qi "authentication token manipulation error"; then
-            echo "Password change failed due to token manipulation error. Password may have already been changed."
-        elif echo "$PASSWD_OUTPUT" | grep -qi "password unchanged"; then
-            echo "Password was not changed. It may already be set to something other than the flashed default arduino."
-        else
-            echo "Password change failed. Output: $PASSWD_OUTPUT"
-        fi
-    elif echo "$PASSWD_OUTPUT" | grep -qi "authentication token manipulation error"; then
-        echo "Password change failed due to token manipulation error. Password may have already been changed."
-    else
-        echo "Password may have already been changed or another error occurred. Output: $PASSWD_OUTPUT"
+    if ! adb -s "$device" push "$APP_BRICK_DIR" /home/arduino/ArduinoApps/; then
+        log "$device" "Failed to push app brick directory."
+        return 1
     fi
+
+    if ! adb -s "$device" push "$UNOQ_SCRIPT" "/home/arduino/.${UNOQ_SCRIPT}"; then
+        log "$device" "Failed to push setup script."
+        return 1
+    fi
+
+    if [ -f .env ]; then
+        if ! adb -s "$device" push .env /home/arduino/.env; then
+            log "$device" "Failed to push .env file."
+            return 1
+        fi
+    fi
+
+    if ! adb -s "$device" shell "chmod +x /home/arduino/.${UNOQ_SCRIPT}"; then
+        log "$device" "Failed to make setup script executable."
+        return 1
+    fi
+
+    if [ -z "${UNOQ_DEFAULT_PASSWORD:-}" ]; then
+        log "$device" "UNOQ_DEFAULT_PASSWORD is not set. Skipping password change."
+    else
+        log "$device" "Changing password (attempt 1: no current password)..."
+        command_output=$(adb -s "$device" shell "printf '%s\n%s\n' '$UNOQ_DEFAULT_PASSWORD' '$UNOQ_DEFAULT_PASSWORD' | passwd arduino" 2>&1)
+
+        if echo "$command_output" | grep -Eqi "password updated successfully|all authentication tokens updated successfully|passwd: password changed"; then
+            log "$device" "Password changed successfully (no current password required)."
+        elif echo "$command_output" | grep -Eqi "current password|authentication failure|password unchanged"; then
+            log "$device" "Retrying password change with current password 'arduino'..."
+            command_output=$(adb -s "$device" shell "printf '%s\n%s\n%s\n' 'arduino' '$UNOQ_DEFAULT_PASSWORD' '$UNOQ_DEFAULT_PASSWORD' | passwd arduino" 2>&1)
+
+            if echo "$command_output" | grep -Eqi "password updated successfully|all authentication tokens updated successfully|passwd: password changed"; then
+                log "$device" "Password changed successfully using current password."
+            elif echo "$command_output" | grep -qi "authentication token manipulation error"; then
+                log "$device" "Password change hit token manipulation error; password may already be changed."
+            elif echo "$command_output" | grep -qi "password unchanged"; then
+                log "$device" "Password unchanged; it may already be non-default."
+            else
+                log "$device" "Password change failed. Output: $command_output"
+            fi
+        elif echo "$command_output" | grep -qi "authentication token manipulation error"; then
+            log "$device" "Password change hit token manipulation error; password may already be changed."
+        else
+            log "$device" "Password change may have already happened or failed. Output: $command_output"
+        fi
+    fi
+
+    if ! adb -s "$device" shell "source /etc/profile; bash /home/arduino/.${UNOQ_SCRIPT}"; then
+        log "$device" "Remote setup script execution failed."
+        return 1
+    fi
+
+    log "$device" "Update workflow completed successfully."
+    return 0
+}
+
+echo "Starting parallel update across ${#DEVICES[@]} device(s)..."
+PIDS=()
+
+for device in "${DEVICES[@]}"; do
+    (
+        set -o pipefail
+        process_device "$device" 2>&1 | sed -u "s/^/[${device}] /"
+    ) &
+    PIDS+=("$!")
+done
+
+SUCCESSFUL_DEVICES=()
+FAILED_DEVICES=()
+
+for idx in "${!PIDS[@]}"; do
+    device="${DEVICES[$idx]}"
+    pid="${PIDS[$idx]}"
+
+    if wait "$pid"; then
+        SUCCESSFUL_DEVICES+=("$device")
+    else
+        FAILED_DEVICES+=("$device")
+    fi
+done
+
+echo ""
+echo "Update summary:"
+echo "  Success (${#SUCCESSFUL_DEVICES[@]}): ${SUCCESSFUL_DEVICES[*]:-none}"
+echo "  Failed  (${#FAILED_DEVICES[@]}): ${FAILED_DEVICES[*]:-none}"
+
+if [ ${#FAILED_DEVICES[@]} -gt 0 ]; then
+    exit 1
 fi
 
-# Run script on UNO-Q in interactive mode to see output
-adb shell "source /etc/profile; bash /home/arduino/.unoq-setup.sh"
-
-echo "Script completed."
+echo "All device updates completed."
