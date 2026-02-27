@@ -1,12 +1,12 @@
-# UNO-Q Updater Quick Start
+# UNO-Q Updater Quick Start for MWC Workshops
 
-This package contains scripts and configuration for setting up and updating your UNO-Q device.
+This package contains scripts and configuration for setting up and updating your UNO-Q devices en-masse.
 
 ## Included Files
 - `.env`: Environment variables for device setup (WiFi credentials and optional password change from default "arduino").
 - `uno-q-update.sh`: Script to push files and run setup on the UNO-Q device via ADB.
 - `unoq-setup.sh`: Script executed on the device to configure network, hostname, user password, and install/update the app brick.
-- `properties.msgpack`: Optional Arduino app CLI properties file that, when present, is pushed to connected devices.
+- `properties.msgpack`: Optional Arduino app CLI properties file that, when present, is pushed to connected devices to stop App Lab asking for device setup.
 
 ## Usage
 1. Edit `.env` to set your desired WiFi credentials and optional password change from default "arduino".
