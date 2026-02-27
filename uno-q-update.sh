@@ -69,6 +69,8 @@ UNOQ_SCRIPT="unoq-setup.sh"
 
 # Clone app brick repo on Mac side if not already present
 APP_BRICK_DIR="example-arduino-app-lab-object-detection-using-flask"
+PROPERTIES_FILE="properties.msgpack"
+PROPERTIES_TARGET_PATH="/var/lib/arduino-app-cli/properties.msgpack"
 if [ ! -d "$APP_BRICK_DIR" ]; then
     echo "Cloning app brick repository on Mac..."
     git clone https://github.com/edgeimpulse/example-arduino-app-lab-object-detection-using-flask.git
@@ -131,13 +133,21 @@ process_device() {
             log "$device" "Password change may have already happened or failed. Output: $command_output"
         fi
     fi
-
+    
     if ! adb -s "$device" shell "source /etc/profile; bash /home/arduino/.${UNOQ_SCRIPT}"; then
         log "$device" "Remote setup script execution failed."
         return 1
     fi
 
     log "$device" "Update workflow completed successfully."
+    if [ -f "$PROPERTIES_FILE" ]; then
+        if ! adb -s "$device" push "$PROPERTIES_FILE" "$PROPERTIES_TARGET_PATH"; then
+            log "$device" "Failed to push $PROPERTIES_FILE to $PROPERTIES_TARGET_PATH."
+            return 1
+        fi
+    else
+        log "$device" "$PROPERTIES_FILE not found locally. Skipping properties file push."
+    fi
     return 0
 }
 

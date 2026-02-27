@@ -97,12 +97,6 @@ until curl -s --max-time 5 --head https://downloads.arduino.cc > /dev/null 2>&1;
 done
 log "Internet connectivity confirmed."
 
-# ── System update ─────────────────────────────────────────────────────────────
-log "Running arduino-app-cli system update..."
-if ! arduino-app-cli system update --yes; then
-    add_error "arduino-app-cli system update failed"
-fi
-
 # ── App brick permissions ─────────────────────────────────────────────────────
 log "Installing app brick (setting permissions for models)..."
 chmod +x /home/arduino/ArduinoApps/example-arduino-app-lab-object-detection-using-flask/models/rubber-ducky-linux-aarch64.eim \
@@ -110,16 +104,8 @@ chmod +x /home/arduino/ArduinoApps/example-arduino-app-lab-object-detection-usin
 chmod +x /home/arduino/ArduinoApps/example-arduino-app-lab-object-detection-using-flask/models/rubber-ducky-fomo-linux-aarch64.eim \
     || add_error "chmod failed: rubber-ducky-fomo-linux-aarch64.eim"
 
-# ── Arduino CLI properties status file ───────────────────────────────────────
-PROPERTIES_TARGET_PATH="/var/lib/arduino-app-cli/properties.msgpack"
-PROPERTIES_TEXT=$'\uFFFD\uFFFDsetup-keyboard-name\uFFFD\x04done\uFFFDsetup-board-name\uFFFD\x04done\uFFFDsetup-credentials\uFFFD\x04done'
-PROPERTIES_B64=$(printf '%s' "$PROPERTIES_TEXT" | base64 | tr -d '\n')
-TEMP_PROPERTIES_PATH="/tmp/properties.msgpack"
-
-log "Writing Arduino app CLI properties state..."
-if printf '%s' "$PROPERTIES_B64" | base64 -d > "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
-    log "Wrote properties payload directly to $PROPERTIES_TARGET_PATH."
-else
-    add_error "Failed to write $PROPERTIES_TARGET_PATH (permission denied). Set UNOQ_DEFAULT_PASSWORD or configure passwordless sudo."
-    rm -f "$TEMP_PROPERTIES_PATH" || true
+# ── System update ─────────────────────────────────────────────────────────────
+log "Running arduino-app-cli system update..."
+if ! arduino-app-cli system update --yes; then
+    add_error "arduino-app-cli system update failed"
 fi
