@@ -76,14 +76,14 @@ else
         add_error "Failed to stage properties payload at $TEMP_PROPERTIES_PATH"
     elif sudo -n install -m 644 "$TEMP_PROPERTIES_PATH" "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
         log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo install."
-    elif [ -n "${UNOQ_SUDO_PASSWORD:-}" ] && printf '%s\n' "$UNOQ_SUDO_PASSWORD" | sudo -S -p '' install -m 644 "$TEMP_PROPERTIES_PATH" "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
+    elif [ -n "${UNOQ_DEFAULT_PASSWORD:-}" ] && printf '%s\n' "$UNOQ_DEFAULT_PASSWORD" | sudo -S -p '' install -m 644 "$TEMP_PROPERTIES_PATH" "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
         log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo -S install."
     elif sudo -n cp "$TEMP_PROPERTIES_PATH" "$PROPERTIES_TARGET_PATH" 2>/dev/null && sudo -n chmod 644 "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
         log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo cp."
-    elif [ -n "${UNOQ_SUDO_PASSWORD:-}" ] && printf '%s\n' "$UNOQ_SUDO_PASSWORD" | sudo -S -p '' sh -c "cp '$TEMP_PROPERTIES_PATH' '$PROPERTIES_TARGET_PATH' && chmod 644 '$PROPERTIES_TARGET_PATH'" 2>/dev/null; then
+    elif [ -n "${UNOQ_DEFAULT_PASSWORD:-}" ] && printf '%s\n' "$UNOQ_DEFAULT_PASSWORD" | sudo -S -p '' sh -c "cp '$TEMP_PROPERTIES_PATH' '$PROPERTIES_TARGET_PATH' && chmod 644 '$PROPERTIES_TARGET_PATH'" 2>/dev/null; then
         log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo -S cp."
     else
-        add_error "Failed to write $PROPERTIES_TARGET_PATH (permission denied). Set UNOQ_SUDO_PASSWORD or configure passwordless sudo."
+        add_error "Failed to write $PROPERTIES_TARGET_PATH (permission denied). Set UNOQ_DEFAULT_PASSWORD or configure passwordless sudo."
     fi
     rm -f "$TEMP_PROPERTIES_PATH" || true
 fi
