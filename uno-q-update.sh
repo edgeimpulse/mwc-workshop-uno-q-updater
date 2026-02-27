@@ -24,7 +24,7 @@ else
     echo "ADB is already installed."
 fi
 
-# Discover connected UNO-Q devices
+# Discover connected UNO Q devices
 DEVICES=()
 while read -r serial state; do
     if [ "$state" = "device" ] && [ -n "$serial" ]; then
@@ -33,7 +33,7 @@ while read -r serial state; do
 done < <(adb devices | awk 'NR>1 && NF>=2 {print $1" "$2}')
 
 if [ ${#DEVICES[@]} -eq 0 ]; then
-    echo "No UNO-Q devices found. Please connect at least one device."
+    echo "No UNO Q devices found. Please connect at least one device."
     exit 1
 else
     echo "Connected devices (${#DEVICES[@]}): ${DEVICES[*]}"
@@ -64,7 +64,7 @@ if [ ! -t 1 ]; then
     done
 fi
 
-# Path to script for UNO-Q
+# Path to script for UNO Q
 UNOQ_SCRIPT="unoq-setup.sh"
 
 # Clone app brick repo on Mac side if not already present
@@ -142,7 +142,7 @@ process_device() {
     else
         log "$device" "$PROPERTIES_FILE not found locally. Skipping properties file push."
     fi
-    
+
     if ! adb -s "$device" shell "source /etc/profile; bash /home/arduino/.${UNOQ_SCRIPT}"; then
         log "$device" "Remote setup script execution failed."
         return 1
