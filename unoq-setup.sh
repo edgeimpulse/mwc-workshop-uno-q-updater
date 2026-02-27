@@ -56,7 +56,22 @@ if [ -z "$UNOQ_WIFI_SSID" ] || [ -z "$UNOQ_WIFI_PASSWORD" ]; then
     exit 1
 fi
 
-log "Current user: $(whoami)"
+CURRENT_USER=$(whoami)
+log "Current user: $CURRENT_USER"
+if [ "$CURRENT_USER" != "arduino" ]; then
+    log "Current user is not arduino; re-running script as arduino..."
+    if ! command -v su > /dev/null 2>&1; then
+        add_error "Cannot switch to arduino user: 'su' command not found."
+        exit 1
+    fi
+
+    if su - arduino -c "bash $0"; then
+        exit 0
+    else
+        add_error "Failed to switch user with 'su - arduino'."
+        exit 1
+    fi
+fi
 
 log "Updating PATH..."
 export PATH=$PATH:/usr/bin:/bin:/usr/local/bin
