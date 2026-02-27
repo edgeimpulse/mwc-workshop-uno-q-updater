@@ -59,18 +59,8 @@ fi
 CURRENT_USER=$(whoami)
 log "Current user: $CURRENT_USER"
 if [ "$CURRENT_USER" != "arduino" ]; then
-    log "Current user is not arduino; re-running script as arduino..."
-    if ! command -v su > /dev/null 2>&1; then
-        add_error "Cannot switch to arduino user: 'su' command not found."
-        exit 1
-    fi
-
-    if su - arduino -c "bash $0"; then
-        exit 0
-    else
-        add_error "Failed to switch user with 'su - arduino'."
-        exit 1
-    fi
+    add_error "Current user is not arduino, this device is too far out of date or the user has been modified. Please flash the latest image from https://docs.arduino.cc/tutorials/uno-q/update-image/ and run this setup script again."
+    exit 1
 fi
 
 log "Updating PATH..."
@@ -85,7 +75,38 @@ else
     log "Connecting to WiFi..."
     wifi_command="nmcli dev wifi connect $UNOQ_WIFI_SSID password $UNOQ_WIFI_PASSWORD"
     log "WiFi command: $wifi_command"
-    eval $wifi_command
+
+    WIFI_RETRY_MAX=3
+    WIFI_RETRY_DELAY=3
+    WIFI_ATTEMPT=1
+    WIFI_CONNECTED=0
+
+    while [ "$WIFI_ATTEMPT" -le "$WIFI_RETRY_MAX" ]; do
+        WIFI_OUTPUT=$(nmcli dev wifi connect "$UNOQ_WIFI_SSID" password "$UNOQ_WIFI_PASSWORD" 2>&1)
+        WIFI_EXIT_CODE=$?
+
+        if [ "$WIFI_EXIT_CODE" -eq 0 ]; then
+            WIFI_CONNECTED=1
+            break
+        fi
+
+        if echo "$WIFI_OUTPUT" | grep -Fq "No Wi-Fi device found."; then
+            log "No Wi-Fi device found (attempt ${WIFI_ATTEMPT}/${WIFI_RETRY_MAX}); retrying in ${WIFI_RETRY_DELAY}s..."
+            sleep "$WIFI_RETRY_DELAY"
+            WIFI_ATTEMPT=$((WIFI_ATTEMPT + 1))
+            continue
+        fi
+
+        add_error "WiFi connection failed: $WIFI_OUTPUT"
+        break
+    done
+
+    if [ "$WIFI_CONNECTED" -ne 1 ]; then
+        if [ "$WIFI_ATTEMPT" -gt "$WIFI_RETRY_MAX" ]; then
+            add_error "WiFi connection failed after ${WIFI_RETRY_MAX} attempts: No Wi-Fi device found."
+        fi
+        exit 1
+    fi
 fi
 
 # ── DNS ───────────────────────────────────────────────────────────────────────
@@ -122,5 +143,5 @@ chmod +x /home/arduino/ArduinoApps/example-arduino-app-lab-object-detection-usin
 # ── System update ─────────────────────────────────────────────────────────────
 log "Running arduino-app-cli system update..."
 if ! arduino-app-cli system update --yes; then
-    add_error "arduino-app-cli system update failed"
+   add_error "arduino-app-cli system update failed"
 fi

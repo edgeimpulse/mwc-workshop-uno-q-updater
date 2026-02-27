@@ -1,6 +1,6 @@
 # UNO Q Updater Quick Start for MWC Workshops
 
-This package contains scripts and configuration for setting up and updating your UNO Q devices en-masse. Tested on MacOS.
+This package contains scripts and configuration for setting up and updating your UNO Q devices en-masse. Tested on MacOS. This will only work reliably on freshly flashed/new UNO Q devices as it assumes the defaults. If your UNO Q logs in as root by default on `adb shell` then it needs to be reflashed to a newer OS.
 
 ## Included Files
 - `.env`: Environment variables for device setup (WiFi credentials and optional password change from default "arduino").
