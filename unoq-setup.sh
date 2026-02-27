@@ -61,33 +61,6 @@ log "Current user: $(whoami)"
 log "Updating PATH..."
 export PATH=$PATH:/usr/bin:/bin:/usr/local/bin
 
-# ── Arduino CLI properties status file ───────────────────────────────────────
-PROPERTIES_TARGET_PATH="/var/lib/arduino-app-cli/properties.msgpack"
-PROPERTIES_TEXT=$'\uFFFD\uFFFDsetup-keyboard-name\uFFFD\x04done\uFFFDsetup-board-name\uFFFD\x04done\uFFFDsetup-credentials\uFFFD\x04done'
-PROPERTIES_B64=$(printf '%s' "$PROPERTIES_TEXT" | base64 | tr -d '\n')
-TEMP_PROPERTIES_PATH="/tmp/properties.msgpack"
-
-log "Writing Arduino app CLI properties state..."
-if printf '%s' "$PROPERTIES_B64" | base64 -d > "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
-    log "Wrote properties payload directly to $PROPERTIES_TARGET_PATH."
-else
-    log "Direct write to $PROPERTIES_TARGET_PATH failed. Trying staged copy via /tmp..."
-    if ! printf '%s' "$PROPERTIES_B64" | base64 -d > "$TEMP_PROPERTIES_PATH"; then
-        add_error "Failed to stage properties payload at $TEMP_PROPERTIES_PATH"
-    elif sudo -n install -m 644 "$TEMP_PROPERTIES_PATH" "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
-        log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo install."
-    elif [ -n "${UNOQ_DEFAULT_PASSWORD:-}" ] && printf '%s\n' "$UNOQ_DEFAULT_PASSWORD" | sudo -S -p '' install -m 644 "$TEMP_PROPERTIES_PATH" "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
-        log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo -S install."
-    elif sudo -n cp "$TEMP_PROPERTIES_PATH" "$PROPERTIES_TARGET_PATH" 2>/dev/null && sudo -n chmod 644 "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
-        log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo cp."
-    elif [ -n "${UNOQ_DEFAULT_PASSWORD:-}" ] && printf '%s\n' "$UNOQ_DEFAULT_PASSWORD" | sudo -S -p '' sh -c "cp '$TEMP_PROPERTIES_PATH' '$PROPERTIES_TARGET_PATH' && chmod 644 '$PROPERTIES_TARGET_PATH'" 2>/dev/null; then
-        log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo -S cp."
-    else
-        add_error "Failed to write $PROPERTIES_TARGET_PATH (permission denied). Set UNOQ_DEFAULT_PASSWORD or configure passwordless sudo."
-    fi
-    rm -f "$TEMP_PROPERTIES_PATH" || true
-fi
-
 # ── WiFi ──────────────────────────────────────────────────────────────────────
 log "Checking if WiFi is already connected..."
 CURRENT_SSID=$(nmcli -t -f active,ssid dev wifi | grep '^yes:' | cut -d':' -f2)
@@ -124,6 +97,12 @@ until curl -s --max-time 5 --head https://downloads.arduino.cc > /dev/null 2>&1;
 done
 log "Internet connectivity confirmed."
 
+# ── System update ─────────────────────────────────────────────────────────────
+log "Running arduino-app-cli system update..."
+if ! arduino-app-cli system update --yes; then
+    add_error "arduino-app-cli system update failed"
+fi
+
 # ── App brick permissions ─────────────────────────────────────────────────────
 log "Installing app brick (setting permissions for models)..."
 chmod +x /home/arduino/ArduinoApps/example-arduino-app-lab-object-detection-using-flask/models/rubber-ducky-linux-aarch64.eim \
@@ -131,8 +110,16 @@ chmod +x /home/arduino/ArduinoApps/example-arduino-app-lab-object-detection-usin
 chmod +x /home/arduino/ArduinoApps/example-arduino-app-lab-object-detection-using-flask/models/rubber-ducky-fomo-linux-aarch64.eim \
     || add_error "chmod failed: rubber-ducky-fomo-linux-aarch64.eim"
 
-# ── System update ─────────────────────────────────────────────────────────────
-log "Running arduino-app-cli system update..."
-if ! arduino-app-cli system update --yes; then
-    add_error "arduino-app-cli system update failed"
+# ── Arduino CLI properties status file ───────────────────────────────────────
+PROPERTIES_TARGET_PATH="/var/lib/arduino-app-cli/properties.msgpack"
+PROPERTIES_TEXT=$'\uFFFD\uFFFDsetup-keyboard-name\uFFFD\x04done\uFFFDsetup-board-name\uFFFD\x04done\uFFFDsetup-credentials\uFFFD\x04done'
+PROPERTIES_B64=$(printf '%s' "$PROPERTIES_TEXT" | base64 | tr -d '\n')
+TEMP_PROPERTIES_PATH="/tmp/properties.msgpack"
+
+log "Writing Arduino app CLI properties state..."
+if printf '%s' "$PROPERTIES_B64" | base64 -d > "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
+    log "Wrote properties payload directly to $PROPERTIES_TARGET_PATH."
+else
+    add_error "Failed to write $PROPERTIES_TARGET_PATH (permission denied). Set UNOQ_DEFAULT_PASSWORD or configure passwordless sudo."
+    rm -f "$TEMP_PROPERTIES_PATH" || true
 fi
