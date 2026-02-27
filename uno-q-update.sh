@@ -3,9 +3,9 @@
 set -u
 
 log() {
-    local device="$1"
+    local _device="$1"
     local message="$2"
-    echo "[$device] $message"
+    echo "$message"
 }
 
 # Load .env file if present
@@ -39,11 +39,38 @@ else
     echo "Connected devices (${#DEVICES[@]}): ${DEVICES[*]}"
 fi
 
+LABEL_WIDTH=0
+for device in "${DEVICES[@]}"; do
+    current_width=$((${#device} + 2))
+    if [ "$current_width" -gt "$LABEL_WIDTH" ]; then
+        LABEL_WIDTH="$current_width"
+    fi
+done
+
+COLOR_RESET=$'\033[0m'
+COLORS=(
+    $'\033[38;5;39m'
+    $'\033[38;5;208m'
+    $'\033[38;5;46m'
+    $'\033[38;5;201m'
+    $'\033[38;5;226m'
+    $'\033[38;5;51m'
+)
+
+if [ ! -t 1 ]; then
+    COLOR_RESET=""
+    for idx in "${!COLORS[@]}"; do
+        COLORS[$idx]=""
+    done
+fi
+
 # Path to script for UNO-Q
 UNOQ_SCRIPT="unoq-setup.sh"
 
 # Clone app brick repo on Mac side if not already present
 APP_BRICK_DIR="example-arduino-app-lab-object-detection-using-flask"
+PROPERTIES_FILE="properties.msgpack"
+PROPERTIES_TARGET_PATH="/var/lib/arduino-app-cli/properties.msgpack"
 if [ ! -d "$APP_BRICK_DIR" ]; then
     echo "Cloning app brick repository on Mac..."
     git clone https://github.com/edgeimpulse/example-arduino-app-lab-object-detection-using-flask.git
@@ -107,6 +134,15 @@ process_device() {
         fi
     fi
 
+    if [ -f "$PROPERTIES_FILE" ]; then
+        if ! adb -s "$device" push "$PROPERTIES_FILE" "$PROPERTIES_TARGET_PATH"; then
+            log "$device" "Failed to push $PROPERTIES_FILE to $PROPERTIES_TARGET_PATH."
+            return 1
+        fi
+    else
+        log "$device" "$PROPERTIES_FILE not found locally. Skipping properties file push."
+    fi
+    
     if ! adb -s "$device" shell "source /etc/profile; bash /home/arduino/.${UNOQ_SCRIPT}"; then
         log "$device" "Remote setup script execution failed."
         return 1
@@ -119,10 +155,14 @@ process_device() {
 echo "Starting parallel update across ${#DEVICES[@]} device(s)..."
 PIDS=()
 
-for device in "${DEVICES[@]}"; do
+for idx in "${!DEVICES[@]}"; do
+    device="${DEVICES[$idx]}"
+    color="${COLORS[$((idx % ${#COLORS[@]}))]}"
     (
         set -o pipefail
-        process_device "$device" 2>&1 | sed -u "s/^/[${device}] /"
+        process_device "$device" 2>&1 | while IFS= read -r line || [ -n "$line" ]; do
+            printf "%b%-*s%b %s\n" "$color" "$LABEL_WIDTH" "[$device]" "$COLOR_RESET" "$line"
+        done
     ) &
     PIDS+=("$!")
 done

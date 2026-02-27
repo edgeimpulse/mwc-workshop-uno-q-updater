@@ -3,9 +3,10 @@
 This package contains scripts and configuration for setting up and updating your UNO-Q device.
 
 ## Included Files
-- `.env`: Environment variables for device setup (hostname, username, password, WiFi credentials).
+- `.env`: Environment variables for device setup (WiFi credentials).
 - `uno-q-update.sh`: Script to push files and run setup on the UNO-Q device via ADB.
 - `unoq-setup.sh`: Script executed on the device to configure network, hostname, user password, and install/update the app brick.
+- `properties.msgpack`: Optional Arduino app CLI properties file that, when present, is pushed to connected devices.
 
 ## Usage
 1. Edit `.env` to set your desired WiFi credentials.
@@ -17,8 +18,7 @@ The updater now detects all connected devices and runs updates on them in parall
 ## Notes
 - The scripts require ADB and bash.
 - `uno-q-update.sh` executes per-device updates concurrently and prints a success/failure summary.
-- Hostname is set using `arduino-app-cli system set-name`.
-- Username and password are set using `passwd`.
+- If `properties.msgpack` exists in the updater folder, it is pushed to `/var/lib/arduino-app-cli/properties.msgpack` on each connected device.
 - WiFi credentials are required for network setup.
 
 ## Sharing
