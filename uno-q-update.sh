@@ -69,8 +69,6 @@ UNOQ_SCRIPT="unoq-setup.sh"
 
 # Clone app brick repo on Mac side if not already present
 APP_BRICK_DIR="example-arduino-app-lab-object-detection-using-flask"
-PROPERTIES_FILE="properties.msgpack"
-PROPERTIES_TARGET_PATH="/var/lib/arduino-app-cli/properties.msgpack"
 if [ ! -d "$APP_BRICK_DIR" ]; then
     echo "Cloning app brick repository on Mac..."
     git clone https://github.com/edgeimpulse/example-arduino-app-lab-object-detection-using-flask.git
@@ -81,7 +79,6 @@ fi
 process_device() {
     local device="$1"
     local command_output=""
-    local temp_properties_path="/tmp/properties.msgpack"
 
     log "$device" "Starting update workflow..."
 
@@ -133,32 +130,6 @@ process_device() {
         else
             log "$device" "Password change may have already happened or failed. Output: $command_output"
         fi
-    fi
-
-    if [ -f "$PROPERTIES_FILE" ]; then
-        if adb -s "$device" push "$PROPERTIES_FILE" "$PROPERTIES_TARGET_PATH" >/dev/null 2>&1; then
-            log "$device" "Pushed $PROPERTIES_FILE directly to $PROPERTIES_TARGET_PATH."
-        else
-            log "$device" "Direct push to $PROPERTIES_TARGET_PATH failed. Trying staged copy via /tmp..."
-
-            if ! adb -s "$device" push "$PROPERTIES_FILE" "$temp_properties_path" >/dev/null 2>&1; then
-                log "$device" "Failed to stage $PROPERTIES_FILE at $temp_properties_path."
-                return 1
-            fi
-
-            if adb -s "$device" shell "sudo -n install -m 644 '$temp_properties_path' '$PROPERTIES_TARGET_PATH'" >/dev/null 2>&1; then
-                log "$device" "Installed $PROPERTIES_FILE to $PROPERTIES_TARGET_PATH via sudo install."
-            elif adb -s "$device" shell "sudo -n cp '$temp_properties_path' '$PROPERTIES_TARGET_PATH' && sudo -n chmod 644 '$PROPERTIES_TARGET_PATH'" >/dev/null 2>&1; then
-                log "$device" "Installed $PROPERTIES_FILE to $PROPERTIES_TARGET_PATH via sudo cp."
-            else
-                log "$device" "Failed to write $PROPERTIES_TARGET_PATH (permission denied). Ensure passwordless sudo for adb shell user or make target writable."
-                return 1
-            fi
-
-            adb -s "$device" shell "rm -f '$temp_properties_path'" >/dev/null 2>&1 || true
-        fi
-    else
-        log "$device" "$PROPERTIES_FILE not found locally. Skipping properties file push."
     fi
 
     if ! adb -s "$device" shell "source /etc/profile; bash /home/arduino/.${UNOQ_SCRIPT}"; then

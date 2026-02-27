@@ -61,6 +61,29 @@ log "Current user: $(whoami)"
 log "Updating PATH..."
 export PATH=$PATH:/usr/bin:/bin:/usr/local/bin
 
+# ── Arduino CLI properties status file ───────────────────────────────────────
+PROPERTIES_TARGET_PATH="/var/lib/arduino-app-cli/properties.msgpack"
+PROPERTIES_TEXT=$'\uFFFD\uFFFDsetup-keyboard-name\uFFFD\x04done\uFFFDsetup-board-name\uFFFD\x04done\uFFFDsetup-credentials\uFFFD\x04done'
+PROPERTIES_B64=$(printf '%s' "$PROPERTIES_TEXT" | base64 | tr -d '\n')
+TEMP_PROPERTIES_PATH="/tmp/properties.msgpack"
+
+log "Writing Arduino app CLI properties state..."
+if printf '%s' "$PROPERTIES_B64" | base64 -d > "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
+    log "Wrote properties payload directly to $PROPERTIES_TARGET_PATH."
+else
+    log "Direct write to $PROPERTIES_TARGET_PATH failed. Trying staged copy via /tmp..."
+    if ! printf '%s' "$PROPERTIES_B64" | base64 -d > "$TEMP_PROPERTIES_PATH"; then
+        add_error "Failed to stage properties payload at $TEMP_PROPERTIES_PATH"
+    elif sudo -n install -m 644 "$TEMP_PROPERTIES_PATH" "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
+        log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo install."
+    elif sudo -n cp "$TEMP_PROPERTIES_PATH" "$PROPERTIES_TARGET_PATH" 2>/dev/null && sudo -n chmod 644 "$PROPERTIES_TARGET_PATH" 2>/dev/null; then
+        log "Installed properties payload to $PROPERTIES_TARGET_PATH via sudo cp."
+    else
+        add_error "Failed to write $PROPERTIES_TARGET_PATH (permission denied)"
+    fi
+    rm -f "$TEMP_PROPERTIES_PATH" || true
+fi
+
 # ── WiFi ──────────────────────────────────────────────────────────────────────
 log "Checking if WiFi is already connected..."
 CURRENT_SSID=$(nmcli -t -f active,ssid dev wifi | grep '^yes:' | cut -d':' -f2)
