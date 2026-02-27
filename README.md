@@ -13,7 +13,9 @@ This package contains scripts and configuration for setting up and updating your
 2. Connect one or more UNO-Q devices via USB.
 3. Run `./uno-q-update.sh` from your host machine.
 
-The updater now detects all connected devices and runs updates on them in parallel on the host side.
+The updater now detects all connected devices and runs updates on them in parallel on the host side. It will also pull down this demo repo and copy it across to your UNO-Qs then set the permissions for the models https://github.com/edgeimpulse/example-arduino-app-lab-object-detection-using-flask.
+
+Feel free to adapt these scripts to install other repos/dependencies.
 
 ## Notes
 - The scripts require ADB and bash.
